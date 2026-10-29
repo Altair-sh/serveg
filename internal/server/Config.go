@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"encoding"
@@ -38,7 +38,7 @@ func DefaultConfig() *Config {
 	}
 }
 
-func ParseOrCreateDefault(path string) (*Config, error) {
+func ParseOrCreateConfig(path string) (*Config, error) {
 	config, err := ReadConfig(path)
 	if !errors.Is(err, fs.ErrNotExist) {
 		return config, err // either a parsed config, or a real error
