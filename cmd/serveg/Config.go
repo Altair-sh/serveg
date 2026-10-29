@@ -16,8 +16,6 @@ type Config struct {
 	Ip   IP     `toml:"ip"`
 }
 
-var ConfigPath = "serveg.toml"
-
 func ReadConfig(path string) (*Config, error) {
 	var config = new(Config)
 	tomlMeta, err := toml.DecodeFile(path, config)
@@ -40,13 +38,13 @@ func DefaultConfig() *Config {
 	}
 }
 
-func ParseOrCreateDefault() (*Config, error) {
-	config, err := ReadConfig(ConfigPath)
+func ParseOrCreateDefault(path string) (*Config, error) {
+	config, err := ReadConfig(path)
 	if !errors.Is(err, fs.ErrNotExist) {
 		return config, err // either a parsed config, or a real error
 	}
 	config = DefaultConfig()
-	return config, WriteConfig(config, ConfigPath)
+	return config, WriteConfig(config, path)
 }
 
 func WriteConfig(config *Config, path string) (err error) {

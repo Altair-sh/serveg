@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
+	"flag"
 	"net"
 	"os"
 	"os/signal"
-	"serveg/common/log"
+	"serveg/internal/log"
 	"strconv"
 	"syscall"
 	"time"
@@ -24,7 +25,10 @@ func run() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	//defer stop()
 
-	conf, err := ParseOrCreateDefault()
+	configPath := *flag.String("config", "serveg.toml", "path to config file")
+	flag.Parse()
+
+	conf, err := ParseOrCreateDefault(configPath)
 	if err != nil {
 		logger.Error(err)
 		return 1
