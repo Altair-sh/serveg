@@ -22,29 +22,27 @@ func run() int {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 
-	configPath := *flag.String("config", "serveg.toml", "path to config file")
+	configPath := flag.String("config", "serveg.toml", "path to config file")
 	flag.Parse()
 
-	conf, err := server.ParseOrCreateConfig(configPath)
+	conf, err := server.ParseOrCreateConfig(*configPath)
 	if err != nil {
+		logger.Error("can't parse config: ", err)
+		return 1
+	}
+
+	srv := server.Server{Conf: conf}
+	if err := srv.StartGoroutine(); err != nil {
 		logger.Error(err)
 		return 1
 	}
 
-	errCh := make(chan error, 1)
-	go func() { errCh <- server.Serve(conf) }()
-	logger.Info("server started")
-
-	select {
-	// server failed to start
-	case err := <-errCh:
-		logger.Error(err)
-		return 1
 	// got SIGINT/SIGTERM
-	case <-ctx.Done():
-		stop() // restore default behaviour: a second Ctrl+C kills immediately
-		logger.Info("shutting down")
-	}
+	<-ctx.Done()
+	stop() // restore default behaviour: a second Ctrl+C kills immediately
+	logger.Info("shutting down")
+	// waits for server stop
+	srv.Stop()
 
 	return 0
 }

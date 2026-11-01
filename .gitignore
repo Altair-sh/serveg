@@ -1,3 +1,4 @@
 /serveg.toml
 /serveg
 bin/
+__debug_bin*

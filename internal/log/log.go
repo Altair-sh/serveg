@@ -37,6 +37,7 @@ package log
 import (
 	"fmt"
 	"os"
+	sh "serveg/internal/string_helper"
 	"sync"
 	"time"
 )
@@ -164,9 +165,9 @@ func buildMessage(context string, severity Severity, a ...any) message {
 	return message{text, color}
 }
 
-func (msg message) print() {
+func (msg *message) print() {
 	SetColorFg(msg.color)
-	if _, err := os.Stdout.Write([]byte(msg.text)); err != nil {
+	if _, err := os.Stdout.Write(sh.UnsafeGetStrBytes(msg.text)); err != nil {
 		panic(err)
 	}
 }
