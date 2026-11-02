@@ -4,6 +4,7 @@ import (
 	"io"
 	"slices"
 	"strconv"
+	"time"
 	"unicode/utf8"
 )
 
@@ -62,6 +63,11 @@ func (b *StringBuilder) AddR(v rune) *StringBuilder {
 
 func (b *StringBuilder) AddBool(v bool) *StringBuilder {
 	b.Buf = strconv.AppendBool(b.Buf, v)
+	return b
+}
+
+func (b *StringBuilder) AddT(v time.Time, fmt string) *StringBuilder {
+	b.Buf = v.AppendFormat(b.Buf, fmt)
 	return b
 }
 

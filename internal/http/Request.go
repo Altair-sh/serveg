@@ -10,8 +10,8 @@ type Request struct {
 	Method   string
 	Protocol string
 	// url-encoded characters (%D0), query params (?v=123)
-	PathRaw     string
-	Path        string
+	UrlRaw      string
+	Url         string
 	QueryParams mapStrStr
 	// keys are in lower case
 	// duplicate keys are joined with ", "
@@ -20,6 +20,9 @@ type Request struct {
 	WantsKeepAlive bool
 }
 
+// TODO: add request body support
+// TODO: check contentLength <= MaxUpload
+// TODO: use io.LimitReader(conn.r, contentLength)
 // Read request (body not supported)
 // Returns valid request pointer. If err != nil, req is partially parsed.
 // It doesn't enforce "Host" header because i don't need it in this project.
@@ -107,7 +110,7 @@ func (conn *Connection) readFirstLine(req *Request, readN *int) error {
 	}
 	req.Method = parts[0]
 	// url-encoded characters (%D0), query params (?v=123)
-	req.PathRaw = parts[1]
+	req.UrlRaw = parts[1]
 	req.Protocol = parts[2]
 
 	if req.Protocol != "HTTP/1.0" && req.Protocol != "HTTP/1.1" {
@@ -115,13 +118,13 @@ func (conn *Connection) readFirstLine(req *Request, readN *int) error {
 			"request protocol not supported: "+req.Protocol)
 	}
 
-	u, err := url.ParseRequestURI(req.PathRaw)
+	u, err := url.ParseRequestURI(req.UrlRaw)
 	if err != nil {
 		return NewHttpError(StatusBadRequest, err.Error())
 	}
 
-	req.Path = sh.ResolveSafePath(u.Path)
-	if req.Path == "" {
+	req.Url = sh.ResolveSafePath(u.Path)
+	if req.Url == "" {
 		return NewHttpError(StatusForbidden,
 			"unsafe request path '"+u.Path+"'")
 	}

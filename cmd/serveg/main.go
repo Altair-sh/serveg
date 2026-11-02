@@ -31,7 +31,7 @@ func run() int {
 		return 1
 	}
 
-	srv := server.Server{Conf: conf}
+	srv := server.NewServer(conf)
 	if err := srv.StartGoroutine(); err != nil {
 		logger.Error(err)
 		return 1

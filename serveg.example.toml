@@ -1,0 +1,24 @@
+# serveg config, copy to serveg.toml
+# The file contains passwords: make it readable only by the user serveg runs as (chmod 600).
+address = "127.0.0.1:8080"
+max_upload = 4_294_967_296
+
+# Each [[share]] makes a directory available under an URL prefix.
+# Missing read_password: anyone can download.
+# Missing write_password: read-only, uploads are rejected.
+# The write password also allows downloading.
+
+[[share]]
+url = "/public"        # http://address/public/...
+path = "share/public"  # relative paths are relative to this config file
+write_password = "change-me"
+
+[[share]]
+url = "/private"
+path = "share/private"
+read_password = "change-me-too"
+write_password = "change-me-three"
+
+[[share]]
+url = "/"
+path = "share/index.html" # redirect url to file

@@ -5,6 +5,7 @@ import (
 	"net"
 	sh "serveg/internal/string_helper"
 	"strings"
+	"time"
 )
 
 const maxHeaderBytes = 16 * 1024
@@ -14,16 +15,18 @@ type mapStrStr map[string]string
 type HeadersMap map[string]string
 
 type Connection struct {
-	socket *net.TCPConn
-	r      *bufio.Reader
-	wbuf   sh.StringBuilder
+	socket  *net.TCPConn
+	timeout time.Duration
+	r       *bufio.Reader
+	wbuf    sh.StringBuilder
 }
 
-func NewConnection(socket *net.TCPConn) *Connection {
+func NewConnection(socket *net.TCPConn, timeout time.Duration) *Connection {
 	return &Connection{
-		socket: socket,
-		r:      bufio.NewReaderSize(socket, maxHeaderBytes),
-		wbuf:   sh.StringBuilder{Buf: make([]byte, 0, initialWriteBufCap)},
+		socket:  socket,
+		timeout: timeout,
+		r:       bufio.NewReaderSize(socket, maxHeaderBytes),
+		wbuf:    sh.StringBuilder{Buf: make([]byte, 0, initialWriteBufCap)},
 	}
 }
 
