@@ -41,7 +41,8 @@ type listingRow struct {
 }
 
 func (conn *connection) serveDirListing(dirPath string) *http.Response {
-	htmlBytes, err := genDirListingHtml(&conn.log, dirPath, conn.req.Url)
+	htmlBytes, err := genDirListingHtml(&conn.log, dirPath,
+		conn.req.Url, conn.srv.Conf.HtmlTitle)
 	if err != nil {
 		return conn.createErrorResponse(false, http.StatusInternalServerError, err.Error())
 	}
@@ -51,7 +52,7 @@ func (conn *connection) serveDirListing(dirPath string) *http.Response {
 	return res
 }
 
-func genDirListingHtml(logger *log.LoggerContext, dirPath, reqUrl string) ([]byte, error) {
+func genDirListingHtml(logger *log.LoggerContext, dirPath, reqUrl, pageTitle string) ([]byte, error) {
 	dirEntries, err := os.ReadDir(dirPath)
 	if err != nil {
 		return nil, err
@@ -89,9 +90,9 @@ func genDirListingHtml(logger *log.LoggerContext, dirPath, reqUrl string) ([]byt
 <head>
 <meta charset="utf-8">
 <title>`)
-	reqUrlHtmlEscaped := htmlEscape(reqUrl)
-	sb.AddS(reqUrlHtmlEscaped)
-	sb.AddS(`</title>
+	sb.AddS(htmlEscape(pageTitle + " " + reqUrl))
+	sb.AddS(`
+</title>
 <style>
 	body { font-family: sans-serif; margin: 2em; }
 	td { padding: .2em 1em .2em 0; }
@@ -99,7 +100,7 @@ func genDirListingHtml(logger *log.LoggerContext, dirPath, reqUrl string) ([]byt
 </style>
 </head>
 <body>`)
-	sb.AddS("<h1>").AddS(reqUrlHtmlEscaped).AddS("</h1>")
+	sb.AddS("<h1>").AddS(htmlEscape(reqUrl)).AddS("</h1>")
 	sb.AddS(`<table id="listing">`)
 	sb.AddS(`<tr><td><a href="`)
 	sb.AddS(http.PercentEcodeUrl(path.Dir(reqUrl)))

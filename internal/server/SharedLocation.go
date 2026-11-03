@@ -56,25 +56,29 @@ func (sh *SharedLocation) normalize(configDir string) error {
 func (sh *SharedLocation) String() string {
 	var r, w string
 	if sh.ReadPassword == "" {
-		r = "public"
+		r = "pub"
 	} else {
-		r = "password"
+		r = "pas"
 	}
 	if sh.WritePassword == "" {
-		w = "no"
+		w = "no "
 	} else {
-		w = "password"
+		w = "pas"
 	}
+	access := "{ " + "r:" + r + ", w:" + w + " }"
 	url := sh.Url
 	if url == "" {
 		url = "/"
 	}
-	return "share '" + url + "' r:" + r + " w:" + w +
-		" -> '" + sh.Path + "'"
+	return "share " + access + " '" + url + "' -> '" + sh.Path + "'"
 }
 
 func (sh *SharedLocation) mkdir() error {
-	return os.MkdirAll(sh.Path, 0o755)
+	_, err := os.Stat(sh.Path)
+	if err == os.ErrNotExist {
+		return os.MkdirAll(sh.Path, 0o755)
+	}
+	return err
 }
 
 type UrlStatus uint32

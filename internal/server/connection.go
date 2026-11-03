@@ -164,8 +164,8 @@ func (conn *connection) serveFile(filePath string) *http.Response {
 	// if not truncate, mtime will always be > ifModifiedSince
 	mtime := finf.ModTime().UTC().Truncate(time.Second)
 
-	ifModifiedSince, errTimeParse := time.Parse(http.TimeFormat, conn.req.Headers["if-modified-since"])
-	notModified := errTimeParse == nil && !mtime.After(ifModifiedSince)
+	ifModifiedSince, errTime := time.Parse(http.TimeFormat, conn.req.Headers["if-modified-since"])
+	notModified := errTime == nil && !mtime.After(ifModifiedSince)
 	if notModified {
 		return conn.http.CreateResponse(http.StatusNotModified, conn.req, false)
 	}
@@ -178,6 +178,9 @@ func (conn *connection) serveFile(filePath string) *http.Response {
 		fileOwnershipTransferred = true
 		res.AttachBodyReader(f, size, http.GetMimeType(fileName))
 	}
+	// Tell browser to not use its own caching, remember last-modified
+	// On next request browser will send if-modified-since and let server check if file changed.
+	res.Headers["cache-control"] = "no-cache"
 	res.Headers["last-modified"] = mtime.Format(http.TimeFormat)
 	res.Headers["content-disposition"] = http.ContentDisposition("inline", fileName)
 	//TODO: accept "range" header and return StatusPartialContent

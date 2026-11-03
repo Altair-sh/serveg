@@ -38,6 +38,8 @@ func (conn *Connection) CreateResponse(
 		Status: status,
 		Headers: HeadersMap{
 			"date": time.Now().UTC().Format(TimeFormat),
+			// without it browser may remember response and not resend it
+			"cache-control": "no-store",
 		},
 	}
 

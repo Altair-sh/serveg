@@ -2,6 +2,7 @@
 # The file contains passwords: make it readable only by the user serveg runs as (chmod 600).
 address = "127.0.0.1:8080"
 max_upload = 4_294_967_296
+html_title = "serveg"
 
 # Each [[share]] makes a directory available under an URL prefix.
 # Missing read_password: anyone can download.
@@ -12,6 +13,7 @@ max_upload = 4_294_967_296
 url = "/public"        # http://address/public/...
 path = "share/public"  # relative paths are relative to this config file
 write_password = "change-me"
+# read:public, write:password
 
 [[share]]
 url = "/private"
@@ -21,4 +23,9 @@ write_password = "change-me-three"
 
 [[share]]
 url = "/"
-path = "share/index.html" # redirect url to file
+path = "share/index.html" # you may add links to shared directories here
+# read:public, write:no
+
+[[share]]
+url = "/favicon.ico"
+path = "share/favicon.ico" # add favicon
