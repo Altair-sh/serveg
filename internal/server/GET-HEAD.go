@@ -11,17 +11,26 @@ import (
 
 func (conn *TcpConnection) serveFileOrDir(req *http.Request) *http.Response {
 	path, share, urlStatus := conn.srv.Conf.Share.MapUrl(req.Url)
-	// TODO implement authorization
-	_ = share
+	// handle authorization
+	if share != nil {
+		access := checkSharePasswords(share, req)
+		if access < AccessReadOnly {
+			return conn.createErrorResponse(req, false, http.StatusUnauthorized,
+				"authorization required").
+				WithHeader("www-authenticate",
+					`Basic realm="`+share.Url+`", charset="UTF-8"`)
+		}
+	}
+
 	switch urlStatus {
 	case UrlFile:
 		return conn.serveFile(req, path)
 	case UrlDir:
 		return conn.serveDirListing(req, path)
 	case UrlNotFound:
-		return conn.createErrorResponse(req, false, http.StatusNotFound, path)
+		return conn.createErrorResponse(req, false, http.StatusNotFound, req.Url)
 	case UrlForbidden:
-		return conn.createErrorResponse(req, false, http.StatusForbidden, path)
+		return conn.createErrorResponse(req, false, http.StatusForbidden, req.Url)
 	case UrlIncorrect:
 		return conn.createErrorResponse(req, false, http.StatusBadRequest,
 			"invalid url '"+req.Url+"'")

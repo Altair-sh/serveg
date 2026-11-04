@@ -121,3 +121,9 @@ func (b *StringBuilder) String() string {
 func (b *StringBuilder) StringUnsafe() string {
 	return UnsafeBytesToStr(b.Buf)
 }
+
+func (b *StringBuilder) Remove(n int) *StringBuilder {
+	l := b.Len()
+	b.Buf = b.Buf[:l-min(n, l)]
+	return b
+}

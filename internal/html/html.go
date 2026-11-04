@@ -18,12 +18,16 @@ type listingRow struct {
 
 func (row *listingRow) genHtml(sb *sh.StringBuilder) {
 	sb.AddS(`<tr>`)
-	sb.AddS(`<td><a href="`).AddS(row.url).AddB('"')
-	if !row.isDir {
+	sb.AddS(`<td><a href="`).AddS(row.url)
+	if row.isDir {
+		// add slash to directory url
+		// because browser remembers password for directory with trailing slash
+		sb.AddS(`/">`)
+	} else {
 		// tell browser to download file instead of opening in new tab
-		sb.AddS(" download")
+		sb.AddS(`" download>`)
 	}
-	sb.AddB('>').AddS(row.name).AddS(`</a></td>`)
+	sb.AddS(row.name).AddS(`</a></td>`)
 	sb.AddS(`<td class="size">`).AddS(row.size).AddS(`</td>`)
 	sb.AddS(`<td class="date">`).AddS(row.mtime).AddS(`</td>`)
 	sb.AddS(`</tr>`)

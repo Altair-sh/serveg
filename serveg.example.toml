@@ -1,7 +1,7 @@
 # serveg config, copy to serveg.toml
 # The file contains passwords: make it readable only by the user serveg runs as (chmod 600).
 address = "127.0.0.1:8080"
-max_upload = 4_294_967_296
+max_upload = 4_294_967_296 # 4 GB
 html_title = "serveg"
 
 # Each [[share]] makes a directory available under an URL prefix.

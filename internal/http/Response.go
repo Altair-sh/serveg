@@ -122,6 +122,17 @@ func (res *Response) WithBodyReader(body io.Reader,
 	return res
 }
 
+func (res *Response) WithHeader(k, v string) *Response {
+	res.Headers[k] = v
+	return res
+}
+func (res *Response) WithHeaderI(k string, v int64) *Response {
+	return res.WithHeader(k, strconv.FormatInt(v, 10))
+}
+func (res *Response) WithHeaderU(k string, v uint64) *Response {
+	return res.WithHeader(k, strconv.FormatUint(v, 10))
+}
+
 func (conn *Connection) CreateErrorResponse(
 	req *Request, wantsClose bool, httpErr *HttpError,
 ) *Response {

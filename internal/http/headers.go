@@ -8,6 +8,31 @@ import (
 
 const HeaderTimeFormat = "Mon, 02 Jan 2006 15:04:05 GMT"
 
+type SetStr map[string]struct{}
+
+var SecretHeaders = SetStr{
+	"authorization": {},
+}
+
+func HeadersToString(headers HeadersMap, secretHeaders SetStr) string {
+	sb := sh.StringBuilder{Buf: make([]byte, 0, len(headers)*64)}
+	sb.AddS("{ ")
+	for k, v := range headers {
+		sb.AddB('"').AddS(k).AddS(`": "`)
+		if _, ok := secretHeaders[k]; ok {
+			sb.AddS("***")
+		} else {
+			sb.AddS(v)
+		}
+		sb.AddS(`", `)
+	}
+	if sb.Len() > 2 {
+		sb.Remove(2)
+	}
+	sb.AddS(" }")
+	return sb.StringUnsafe()
+}
+
 // search in splitted parts of header value
 func HeaderValueContains(sourceSplit []string, target string) bool {
 	for _, v := range sourceSplit {

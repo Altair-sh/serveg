@@ -90,7 +90,7 @@ func (conn *Connection) Start() {
 		} else {
 			// valid request
 			conn.log.Info(req.Method, " ", req.Url, " ", req.Protocol)
-			conn.log.Trace("request headers: ", req.Headers)
+			conn.log.Trace("request headers: ", HeadersToString(req.Headers, SecretHeaders))
 			res = conn.callback(req)
 			if req.HasUnreadBody() {
 				res = conn.CreateErrorResponse(req, true, ErrHasUnreadBody)
@@ -99,7 +99,7 @@ func (conn *Connection) Start() {
 
 		conn.log.Info("sending response: ", res.Status,
 			" content-length: ", res.Headers["content-length"])
-		conn.log.Trace("response headers: ", res.Headers)
+		conn.log.Trace("response headers: ", HeadersToString(res.Headers, SecretHeaders))
 		err = conn.sendResponse(res)
 		if err != nil {
 			conn.logError(err)
