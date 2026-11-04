@@ -1,5 +1,5 @@
 # serveg
-Small HTTP/1.1 file server. Meant to run behind a reverse proxy that handles TLS (see [Caddy](#caddy)).
+Small HTTP/1.1 file server. Meant to run behind a reverse proxy that handles TLS (see [CADDY.md](./CADDY.md)).
 
 ## Features:
 - upload and download files
@@ -25,17 +25,3 @@ bin/servegp         # reads ./serveg.toml
 bin/servegp -config /etc/serveg/serveg.toml
 ```
 
-## Caddy
-
-```
-files.example.com {
-    request_body {
-        max_size 4GB
-    }
-    reverse_proxy 127.0.0.1:8080 {
-        transport http {
-            versions 1.1
-        }
-    }
-}
-```
