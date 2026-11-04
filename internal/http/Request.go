@@ -1,14 +1,18 @@
 package http
 
 import (
+	"fmt"
+	"io"
 	"net/url"
 	sh "serveg/internal/string_helper"
+	"strconv"
 	"strings"
 )
 
 type Request struct {
-	Method   string
-	Protocol string
+	needsReset bool
+	Method     string
+	Protocol   string
 	// url-encoded characters (%D0), query params (?v=123)
 	UrlRaw      string
 	Url         string
@@ -18,23 +22,45 @@ type Request struct {
 	Headers HeadersMap
 	// if true, don't close connection after response
 	WantsKeepAlive bool
+	// value from header or 0
+	ContentLength int64
+	// wrapper of conn.r
+	bodyReader io.LimitedReader
 }
 
-// TODO: add request body support
-// TODO: check contentLength <= MaxUpload
-// TODO: use io.LimitReader(conn.r, contentLength)
-// Read request (body not supported)
-// Returns valid request pointer. If err != nil, req is partially parsed.
-// It doesn't enforce "Host" header because i don't need it in this project.
-//
-//	if httpErr, ok := errors.AsType[*http.HttpError](err); ok {
-//		// Request is malformed, socket buffer contains unread garbage data.
-//		// Send error code and close connection.
-//	} else {
-//		// something bad happened with the connection, just close it
-//	}
+func (req *Request) reset() {
+	if !req.needsReset {
+		return
+	}
+
+	req.needsReset = false
+	req.Method = req.Method[:0]
+	req.Protocol = req.Protocol[:0]
+	req.UrlRaw = req.UrlRaw[:0]
+	req.Url = req.Url[:0]
+	clear(req.QueryParams)
+	clear(req.Headers)
+	req.WantsKeepAlive = false
+	req.ContentLength = 0
+	req.bodyReader.N = 0
+}
+
+// Returns valid request pointer. If err != nil, req is partially initialized.
+// Don't forget to read body with GetBodyReader() if HasUnreadBody() or ReadRequest will return error.
+// See [HttpError]
 func (conn *Connection) ReadRequest() (req *Request, err error) {
-	req = new(Request)
+	req = &conn.req
+	// TODO: make this check run automatically between ReadRequest and SendResponse.
+	// This can be done by moving reading loop from server/connection to http/Connection and handling requestr in callback (req) => res
+	if req.HasUnreadBody() {
+		err = ErrHasUnreadBody
+		return
+	}
+	req.reset()
+	req.needsReset = true
+	// TODO: remove after moving to callback loop
+	conn.res.reset()
+
 	var readN int
 	// METHOD /path HTTP/ver
 	if err = conn.readFirstLine(req, &readN); err != nil {
@@ -47,14 +73,25 @@ func (conn *Connection) ReadRequest() (req *Request, err error) {
 		return
 	}
 
-	// This server doesn't accept request bodies.
-	// Reject connection rather than desync the stream.
-	contentLength := req.Headers["content-length"]
+	// check body size and initialize req.Body
 	transferEncoding := req.Headers["transfer-encoding"]
-	if (contentLength != "" && contentLength != "0") ||
-		transferEncoding != "" {
-		err = NewHttpError(StatusBadRequest,
-			"request bodies are not supported")
+	if transferEncoding != "" {
+		err = ErrTransferEncodingNotSupported
+		return
+	}
+	contentLengthStr := req.Headers["content-length"]
+	if contentLengthStr != "" {
+		var contentLength uint64
+		contentLength, err = strconv.ParseUint(contentLengthStr, 10, 64)
+		if err != nil {
+			err = NewHttpError(StatusBadRequest,
+				"can't parse header: content-length: "+contentLengthStr)
+			return
+		}
+		if contentLength > 0 {
+			req.ContentLength = int64(contentLength)
+			req.bodyReader.N = req.ContentLength
+		}
 	}
 
 	// set WantsKeepAlive
@@ -68,6 +105,29 @@ func (conn *Connection) ReadRequest() (req *Request, err error) {
 	return
 }
 
+// if true CreateResponse will return error
+func (req *Request) HasUnreadBody() bool {
+	return req.bodyReader.N > 0
+}
+
+func (conn *Connection) GetBodyReader(maxBodyLen int64) (io.Reader, error) {
+	req := &conn.req
+	if req.ContentLength > maxBodyLen {
+		return nil, NewHttpError(StatusRequestEntityTooLarge,
+			fmt.Sprintf("content-length %d > maxBodyLen %d",
+				req.ContentLength, maxBodyLen))
+	}
+	if !req.HasUnreadBody() {
+		return nil, ErrBodyHasBeenAlreadyRead
+	}
+
+	if req.ContentLength != 0 {
+		// body reader with N=0 is a valid reader that just returns EOF
+		req.bodyReader.N = min(req.bodyReader.N, maxBodyLen)
+	}
+	return &req.bodyReader, nil
+}
+
 func (conn *Connection) readLineBelowLimit(readN *int) (string, error) {
 	// read up to maxHeaderBytes
 	slice, notLineEnd, err := conn.r.ReadLine()
@@ -77,13 +137,12 @@ func (conn *Connection) readLineBelowLimit(readN *int) (string, error) {
 	}
 	if notLineEnd {
 		// buffer end was reached but no '\n' found
-		return "", NewHttpError(StatusBadRequest, "line end not found")
+		return "", ErrLineEndNotFound
 	}
 
 	*readN += len(slice) + 1 // \n
 	if *readN > maxHeaderBytes {
-		return "", NewHttpError(StatusRequestHeaderFieldsTooLarge,
-			"headers too large")
+		return "", ErrHeadersTooLarge
 	}
 
 	return strings.TrimRight(string(slice), " \r\n"), nil
@@ -105,8 +164,7 @@ func (conn *Connection) readFirstLine(req *Request, readN *int) error {
 
 	parts := strings.Split(line, " ")
 	if len(parts) != 3 || !strings.HasPrefix(parts[2], "HTTP/") {
-		return NewHttpError(StatusBadRequest,
-			"malformed request line '"+line+"'")
+		return ErrNotHttpRequest
 	}
 	req.Method = parts[0]
 	// url-encoded characters (%D0), query params (?v=123)
@@ -114,8 +172,7 @@ func (conn *Connection) readFirstLine(req *Request, readN *int) error {
 	req.Protocol = parts[2]
 
 	if req.Protocol != "HTTP/1.0" && req.Protocol != "HTTP/1.1" {
-		return NewHttpError(StatusHTTPVersionNotSupported,
-			"request protocol not supported: "+req.Protocol)
+		return ErrProtocolNotSupported
 	}
 
 	u, err := url.ParseRequestURI(req.UrlRaw)
@@ -125,10 +182,8 @@ func (conn *Connection) readFirstLine(req *Request, readN *int) error {
 
 	req.Url = sh.ResolveSafePath(u.Path)
 	if req.Url == "" {
-		return NewHttpError(StatusForbidden,
-			"unsafe request path '"+u.Path+"'")
+		return ErrUnsafeRequestPath
 	}
-	req.QueryParams = make(mapStrStr)
 	for key, values := range u.Query() {
 		req.QueryParams[key] = values[0]
 	}
@@ -137,7 +192,6 @@ func (conn *Connection) readFirstLine(req *Request, readN *int) error {
 }
 
 func (conn *Connection) readHeaders(req *Request, readN *int) error {
-	req.Headers = make(HeadersMap)
 	for {
 		line, err := conn.readLineBelowLimit(readN)
 		if err != nil {
@@ -150,15 +204,13 @@ func (conn *Connection) readHeaders(req *Request, readN *int) error {
 
 		i := strings.IndexByte(line, ':')
 		if i < 1 {
-			return NewHttpError(StatusBadRequest,
-				"not a header line '"+line+"'")
+			return ErrLineNotHeader
 		}
 		key := line[:i]
 		firstB, lastB := key[0], key[i-1]
 		if firstB == ' ' || firstB == '\t' ||
 			lastB == ' ' || lastB == '\t' {
-			return NewHttpError(StatusBadRequest,
-				"header name must not start or end with space")
+			return ErrHeaderNameStartsOrEndsWithSpace
 		}
 		key = strings.ToLower(key)
 

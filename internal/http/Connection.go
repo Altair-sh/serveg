@@ -19,6 +19,9 @@ type Connection struct {
 	timeout time.Duration
 	r       *bufio.Reader
 	wbuf    sh.StringBuilder
+	// hidden to prevent using before ReadRequest/SendResponse
+	req Request  // reset by ReadRequest
+	res Response // reset by CreateResponse and ReadRequest
 }
 
 func NewConnection(socket *net.TCPConn, timeout time.Duration) *Connection {
@@ -27,6 +30,13 @@ func NewConnection(socket *net.TCPConn, timeout time.Duration) *Connection {
 		timeout: timeout,
 		r:       bufio.NewReaderSize(socket, maxHeaderBytes),
 		wbuf:    sh.StringBuilder{Buf: make([]byte, 0, initialWriteBufCap)},
+		req: Request{
+			QueryParams: make(mapStrStr),
+			Headers:     make(HeadersMap),
+		},
+		res: Response{
+			Headers: make(HeadersMap),
+		},
 	}
 }
 

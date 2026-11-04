@@ -20,34 +20,58 @@ const (
 )
 
 type Response struct {
+	needsReset bool
 	Status     StatusCode
-	Headers    HeadersMap // keys are in lower case
-	omitBody   bool       // don't add body and content-* headers for HEAD request
-	bodySize   int64
-	bodyType   responseBodyType
-	bodyBuf    []byte    // small body is sent in one write() call with headers
-	bodyReader io.Reader // big body, sent as multiple write() calls to socket
+	// keys are in lower case
+	Headers HeadersMap
+	// don't add body and content-* headers for HEAD request
+	omitBody bool
+	bodySize int64
+	bodyType responseBodyType
+	// small body is sent in one write() call with headers
+	bodyBuf []byte
+	// big body, sent as multiple write() calls to socket
+	bodyReader io.Reader
 }
 
 const TimeFormat = "Mon, 02 Jan 2006 15:04:05 GMT"
 
-func (conn *Connection) CreateResponse(
-	status StatusCode, req *Request, wantsClose bool,
-) *Response {
-	res := &Response{
-		Status: status,
-		Headers: HeadersMap{
-			"date": time.Now().UTC().Format(TimeFormat),
-			// without it browser may remember response and not resend it
-			"cache-control": "no-store",
-		},
+func (res *Response) reset() {
+	if !res.needsReset {
+		return
 	}
 
-	res.omitBody = req.Method == "HEAD"
-	if !res.omitBody &&
-		status >= 200 &&
-		status != StatusNoContent &&
-		status != StatusNotModified {
+	res.needsReset = false
+	res.Status = StatusNotInitialized
+	clear(res.Headers)
+	res.omitBody = false
+	res.bodySize = 0
+	res.bodyType = responseBodyEmpty
+	res.bodyBuf = res.bodyBuf[:0]
+	if closer, ok := res.bodyReader.(io.Closer); ok {
+		// body is owned by the response
+		_ = closer.Close()
+	}
+	res.bodyReader = nil
+}
+
+func (conn *Connection) CreateResponse(status StatusCode, req *Request, wantsClose bool) *Response {
+
+	res := &conn.res
+	res.reset()
+	res.needsReset = true
+
+	res.Status = status
+	res.Headers["date"] = time.Now().UTC().Format(TimeFormat)
+	// without it browser may remember response and not resend it
+	res.Headers["cache-control"] = "no-store"
+
+	res.omitBody = req.Method == "HEAD" ||
+		status < 200 ||
+		status == StatusNoContent ||
+		status == StatusResetContent ||
+		status == StatusNotModified
+	if !res.omitBody {
 		// content-length is mandatory for most responses
 		res.Headers["content-length"] = "0"
 	}
@@ -61,9 +85,9 @@ func (conn *Connection) CreateResponse(
 	return res
 }
 
-func (res *Response) AttachBodyBuf(body []byte, contentType string) {
+func (res *Response) WithBodyBuf(body []byte, contentType string) *Response {
 	if res.omitBody {
-		return
+		return res
 	}
 
 	if res.bodyType != responseBodyEmpty {
@@ -76,17 +100,18 @@ func (res *Response) AttachBodyBuf(body []byte, contentType string) {
 	lenStr := strconv.FormatUint(uint64(size), 10)
 	res.Headers["content-length"] = lenStr
 	res.Headers["content-type"] = contentType
+	return res
 }
-func (res *Response) AttachBodyStr(body string, contentType string) {
-	res.AttachBodyBuf(sh.UnsafeGetStrBytes(body), contentType)
+func (res *Response) WithBodyStr(body string, contentType string) *Response {
+	return res.WithBodyBuf(sh.UnsafeGetStrBytes(body), contentType)
 }
 
-// body will be closed by SendResponse
-func (res *Response) AttachBodyReader(body io.Reader,
-	size int64, contentType string) {
-
+// body will be closed by SendResponse() or reset()
+func (res *Response) WithBodyReader(body io.Reader,
+	size int64, contentType string,
+) *Response {
 	if res.omitBody {
-		return
+		return res
 	}
 	if res.bodyType != responseBodyEmpty {
 		panic("response already has body")
@@ -97,18 +122,15 @@ func (res *Response) AttachBodyReader(body io.Reader,
 	lenStr := strconv.FormatUint(uint64(size), 10)
 	res.Headers["content-length"] = lenStr
 	res.Headers["content-type"] = contentType
+	return res
 }
 
-var ErrInvalidHeader = errors.New("http: header key or value contains CR or LF")
-
 func (conn *Connection) SendResponse(res *Response) (err error) {
-	if res.bodyType == responseBodyReader {
-		if closer, ok := res.bodyReader.(io.Closer); ok {
-			// body is owned by the response
-			defer func() {
-				_ = closer.Close()
-			}()
-		}
+	if closer, ok := res.bodyReader.(io.Closer); ok {
+		// body is owned by the response
+		defer func() {
+			_ = closer.Close()
+		}()
 	}
 
 	sb := &conn.wbuf
@@ -120,7 +142,7 @@ func (conn *Connection) SendResponse(res *Response) (err error) {
 	for k, v := range res.Headers {
 		// prevent response splitting / header injection
 		if strings.ContainsAny(k, "\r\n:") || strings.ContainsAny(v, "\r\n") {
-			return ErrInvalidHeader
+			return ErrHeaderKeyOrValueHasCRLF
 		}
 		sb.AddS(k).AddS(": ").AddS(v).AddS("\r\n")
 	}
@@ -141,7 +163,7 @@ func (conn *Connection) SendResponse(res *Response) (err error) {
 		}
 		// Write exactly bodySize bytes from body.
 		// It prevents session corruption if body size changed since
-		// AttachBodyReader was called.
+		// WithBodyReader was called.
 		remaining := res.bodySize
 		for remaining > 0 {
 			err = conn.socket.SetWriteDeadline(time.Now().Add(conn.timeout))
@@ -172,9 +194,6 @@ func (conn *Connection) SendResponse(res *Response) (err error) {
 func (conn *Connection) CreateErrorResponse(
 	req *Request, wantsClose bool, httpErr *HttpError,
 ) *Response {
-
-	res := conn.CreateResponse(httpErr.Status, req, wantsClose)
-	// attach error message if method allows
-	res.AttachBodyStr(httpErr.Error(), TextPlain)
-	return res
+	return conn.CreateResponse(httpErr.Status, req, wantsClose).
+		WithBodyStr(httpErr.Error(), TextPlain)
 }

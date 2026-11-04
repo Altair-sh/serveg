@@ -19,9 +19,13 @@ type SharedLocation struct {
 	WritePassword string `toml:"write_password"`
 }
 
+var ErrSharePathEmpty = errors.New("share.path is empty")
+var ErrShareUrlEmpty = errors.New("share.url is empty")
+var ErrShareUrlDoesntStartWithSlash = errors.New("share.url doesn't start with slash")
+
 func (sh *SharedLocation) normalize(configDir string) error {
 	if sh.Path == "" {
-		return errors.New("share.path is empty")
+		return ErrSharePathEmpty
 	}
 	// get absolute path for configDir
 	configDirAbs, err := filepath.Abs(configDir)
@@ -42,10 +46,10 @@ func (sh *SharedLocation) normalize(configDir string) error {
 	sh.Path = filepath.Join(configDirAbs, shPathOsSep)
 
 	if sh.Url == "" {
-		return errors.New("share.url is empty")
+		return ErrShareUrlEmpty
 	}
 	if sh.Url[0] != '/' {
-		return errors.New("share.url doesn't start with slash: '" + sh.Url + "'")
+		return ErrShareUrlDoesntStartWithSlash
 	}
 	// remove trailing slash
 	sh.Url = strings.TrimRight(sh.Url, "/")

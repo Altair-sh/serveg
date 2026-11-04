@@ -1,4 +1,4 @@
-package server
+package html
 
 import (
 	"os"
@@ -8,30 +8,6 @@ import (
 	sh "serveg/internal/string_helper"
 )
 
-const DateTimeTZ = "2006-01-02 15:04:05 UTC-07"
-
-func htmlEscape(s string) string {
-	sb := sh.StringBuilder{Buf: make([]byte, 0, len(s))}
-	for i := 0; i < len(s); i++ {
-		b := s[i]
-		switch b {
-		case '&':
-			sb.AddS("&amp;")
-		case '<':
-			sb.AddS("&lt;")
-		case '>':
-			sb.AddS("&gt;")
-		case '"':
-			sb.AddS("&quot;")
-		case '\'':
-			sb.AddS("&#39;")
-		default:
-			sb.AddB(b)
-		}
-	}
-	return sb.StringUnsafe()
-}
-
 type listingRow struct {
 	name  string // html-escaped
 	url   string // url-encoded
@@ -40,19 +16,20 @@ type listingRow struct {
 	isDir bool
 }
 
-func (conn *connection) serveDirListing(dirPath string) *http.Response {
-	htmlBytes, err := genDirListingHtml(&conn.log, dirPath,
-		conn.req.Url, conn.srv.Conf.HtmlTitle)
-	if err != nil {
-		return conn.createErrorResponse(false, http.StatusInternalServerError, err.Error())
+func (row *listingRow) genHtml(sb *sh.StringBuilder) {
+	sb.AddS(`<tr>`)
+	sb.AddS(`<td><a href="`).AddS(row.url).AddB('"')
+	if !row.isDir {
+		// tell browser to download file instead of opening in new tab
+		sb.AddS(" download")
 	}
-
-	res := conn.http.CreateResponse(http.StatusOK, conn.req, false)
-	res.AttachBodyBuf(htmlBytes, http.TextHtml)
-	return res
+	sb.AddB('>').AddS(row.name).AddS(`</a></td>`)
+	sb.AddS(`<td class="size">`).AddS(row.size).AddS(`</td>`)
+	sb.AddS(`<td class="date">`).AddS(row.mtime).AddS(`</td>`)
+	sb.AddS(`</tr>`)
 }
 
-func genDirListingHtml(logger *log.LoggerContext, dirPath, reqUrl, pageTitle string) ([]byte, error) {
+func GenDirListingHtml(logger *log.LoggerContext, dirPath, reqUrl, pageTitle string) ([]byte, error) {
 	dirEntries, err := os.ReadDir(dirPath)
 	if err != nil {
 		return nil, err
@@ -107,10 +84,10 @@ func genDirListingHtml(logger *log.LoggerContext, dirPath, reqUrl, pageTitle str
 	sb.AddS(`">../</a></td></tr>`)
 
 	for i := 0; i < len(dirs); i++ {
-		genListingRowHtml(&sb, &dirs[i])
+		dirs[i].genHtml(&sb)
 	}
 	for i := 0; i < len(files); i++ {
-		genListingRowHtml(&sb, &files[i])
+		files[i].genHtml(&sb)
 	}
 
 	sb.AddS(`
@@ -124,17 +101,4 @@ func genDirListingHtml(logger *log.LoggerContext, dirPath, reqUrl, pageTitle str
 			estimatedLen, " realLen: ", realLen)
 	}
 	return sb.Buf, nil
-}
-
-func genListingRowHtml(sb *sh.StringBuilder, row *listingRow) {
-	sb.AddS(`<tr>`)
-	sb.AddS(`<td><a href="`).AddS(row.url).AddB('"')
-	if !row.isDir {
-		// tell browser to download file instead of opening in new tab
-		sb.AddS(" download")
-	}
-	sb.AddB('>').AddS(row.name).AddS(`</a></td>`)
-	sb.AddS(`<td class="size">`).AddS(row.size).AddS(`</td>`)
-	sb.AddS(`<td class="date">`).AddS(row.mtime).AddS(`</td>`)
-	sb.AddS(`</tr>`)
 }

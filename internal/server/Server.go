@@ -45,7 +45,7 @@ func (srv *Server) serve() {
 				srv.logger.Info("listener socket closed")
 				return
 			}
-			srv.logger.Warn(err)
+			srv.logger.Error(err)
 			continue
 		}
 		conn := newConnection(srv, i, accepted.(*net.TCPConn))

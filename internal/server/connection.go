@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"serveg/internal/html"
 	"serveg/internal/http"
 	"serveg/internal/log"
 	"strconv"
@@ -52,12 +53,11 @@ func (conn *connection) handle() {
 		conn.req, err = conn.http.ReadRequest()
 		if err != nil {
 			// invalid request
-			conn.logConnError(err)
 			if httpErr, ok := errors.AsType[*http.HttpError](err); ok {
-				conn.log.Info("sending error response")
+				conn.log.Warn(err)
 				res = conn.http.CreateErrorResponse(conn.req, true, httpErr)
 			} else {
-				conn.log.Info("lingering close")
+				conn.logError(err)
 				conn.lingeringClose()
 				return
 			}
@@ -68,31 +68,31 @@ func (conn *connection) handle() {
 			switch conn.req.Method {
 			case "GET", "HEAD":
 				res = conn.serveFileOrDir()
-			case "PUT":
+			case "PUT", "OPTIONS":
 				res = conn.handleUpload()
 			default:
 				res = conn.createErrorResponse(false, http.StatusMethodNotAllowed, conn.req.Method)
 			}
 		}
+
 		conn.log.Info("sending response: ", res.Status,
 			" content-length: ", res.Headers["content-length"])
 		conn.log.Trace("response headers: ", res.Headers)
 		err = conn.http.SendResponse(res)
 		if err != nil {
-			conn.logConnError(err)
+			conn.logError(err)
 			return
 		}
 
 		// it is set by CreateResponse
 		if res.Headers["connection"] == "close" {
-			conn.log.Info("lingering close")
 			conn.lingeringClose()
 			return
 		}
 	}
 }
 
-func (conn *connection) logConnError(err error) {
+func (conn *connection) logError(err error) {
 	if errors.Is(err, os.ErrDeadlineExceeded) {
 		conn.log.Info("time out")
 	} else if errors.Is(err, io.EOF) ||
@@ -101,7 +101,7 @@ func (conn *connection) logConnError(err error) {
 
 		conn.log.Info("closed by client")
 	} else {
-		conn.log.Warn(err)
+		conn.log.Error(err)
 	}
 }
 
@@ -109,11 +109,18 @@ func (conn *connection) logConnError(err error) {
 // so close() doesn't send RST and destroy the response before it's read.
 // Limits: 500 ms, 32 KB
 func (conn *connection) lingeringClose() {
+	conn.log.Info("lingering close")
 	if conn.socket.CloseWrite() != nil {
 		return
 	}
 	_ = conn.socket.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	_, _ = io.Copy(io.Discard, io.LimitReader(conn.socket, 32*1024))
+}
+
+func (conn *connection) createErrorResponse(
+	wantsClose bool, status http.StatusCode, msg string,
+) *http.Response {
+	return conn.http.CreateErrorResponse(conn.req, wantsClose, http.NewHttpError(status, msg))
 }
 
 func (conn *connection) serveFileOrDir() *http.Response {
@@ -137,9 +144,15 @@ func (conn *connection) serveFileOrDir() *http.Response {
 	}
 }
 
-func (conn *connection) createErrorResponse(wantsClose bool, status http.StatusCode, msg string,
-) *http.Response {
-	return conn.http.CreateErrorResponse(conn.req, wantsClose, http.NewHttpError(status, msg))
+func (conn *connection) serveDirListing(dirPath string) *http.Response {
+	htmlBytes, err := html.GenDirListingHtml(&conn.log, dirPath,
+		conn.req.Url, conn.srv.Conf.HtmlTitle)
+	if err != nil {
+		return conn.createErrorResponse(false, http.StatusInternalServerError, err.Error())
+	}
+
+	return conn.http.CreateResponse(http.StatusOK, conn.req, false).
+		WithBodyBuf(htmlBytes, http.TextHtml)
 }
 
 func (conn *connection) serveFile(filePath string) *http.Response {
@@ -176,7 +189,7 @@ func (conn *connection) serveFile(filePath string) *http.Response {
 	if conn.req.Method != "HEAD" {
 		// file will be closed by SendResponse()
 		fileOwnershipTransferred = true
-		res.AttachBodyReader(f, size, http.GetMimeType(fileName))
+		res.WithBodyReader(f, size, http.GetMimeType(fileName))
 	}
 	// Tell browser to not use its own caching, remember last-modified
 	// On next request browser will send if-modified-since and let server check if file changed.
