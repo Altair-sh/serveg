@@ -11,8 +11,9 @@ import (
 
 type Request struct {
 	needsReset bool
-	Method     string
-	Protocol   string
+
+	Method   string
+	Protocol string
 	// url-encoded characters (%D0), query params (?v=123)
 	UrlRaw      string
 	Url         string
@@ -24,6 +25,7 @@ type Request struct {
 	WantsKeepAlive bool
 	// value from header or 0
 	ContentLength int64
+
 	// wrapper of conn.r
 	bodyReader io.LimitedReader
 }
@@ -49,17 +51,9 @@ func (req *Request) reset() {
 // Don't forget to read body with GetBodyReader() if HasUnreadBody() or ReadRequest will return error.
 // See [HttpError]
 func (conn *Connection) ReadRequest() (req *Request, err error) {
-	req = &conn.req
-	// TODO: make this check run automatically between ReadRequest and SendResponse.
-	// This can be done by moving reading loop from server/connection to http/Connection and handling requestr in callback (req) => res
-	if req.HasUnreadBody() {
-		err = ErrHasUnreadBody
-		return
-	}
+	req = &conn._req
 	req.reset()
 	req.needsReset = true
-	// TODO: remove after moving to callback loop
-	conn.res.reset()
 
 	var readN int
 	// METHOD /path HTTP/ver
@@ -110,8 +104,7 @@ func (req *Request) HasUnreadBody() bool {
 	return req.bodyReader.N > 0
 }
 
-func (conn *Connection) GetBodyReader(maxBodyLen int64) (io.Reader, error) {
-	req := &conn.req
+func (req *Request) GetBodyReader(maxBodyLen int64) (io.Reader, error) {
 	if req.ContentLength > maxBodyLen {
 		return nil, NewHttpError(StatusRequestEntityTooLarge,
 			fmt.Sprintf("content-length %d > maxBodyLen %d",

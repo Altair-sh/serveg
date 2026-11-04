@@ -6,6 +6,19 @@ import (
 	"strings"
 )
 
+const HeaderTimeFormat = "Mon, 02 Jan 2006 15:04:05 GMT"
+
+// search in splitted parts of header value
+func HeaderValueContains(sourceSplit []string, target string) bool {
+	for _, v := range sourceSplit {
+		v = strings.TrimSpace(v)
+		if strings.EqualFold(v, target) {
+			return true
+		}
+	}
+	return false
+}
+
 // ContentDisposition builds a Content-Disposition header value (RFC 6266).
 // dispositionType is "inline" or "attachment".
 // filename is an ASCII fallback for old clients,

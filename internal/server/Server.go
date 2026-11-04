@@ -5,25 +5,19 @@ import (
 	"net"
 	"serveg/internal/log"
 	"sync"
-	"time"
 )
 
 type Server struct {
-	Conf   *Config
-	logger log.LoggerContext
-	// used in sockets to sed read/write deadline
-	timeout  time.Duration
+	Conf     *Config
+	logger   log.LoggerContext
 	listener net.Listener
 	wg       sync.WaitGroup
 }
 
-const defaultTimeout = 30 * time.Second
-
 func NewServer(conf *Config) *Server {
 	return &Server{
-		Conf:    conf,
-		logger:  log.LoggerContext{Name: "server"},
-		timeout: defaultTimeout,
+		Conf:   conf,
+		logger: log.LoggerContext{Name: "server"},
 	}
 }
 
@@ -48,8 +42,8 @@ func (srv *Server) serve() {
 			srv.logger.Error(err)
 			continue
 		}
-		conn := newConnection(srv, i, accepted.(*net.TCPConn))
-		go conn.handle()
+		conn := NewTcpConnection(srv, accepted.(*net.TCPConn), i)
+		go conn.Start()
 	}
 }
 

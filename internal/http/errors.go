@@ -25,7 +25,7 @@ func NewHttpError(code StatusCode, msg string) *HttpError {
 }
 
 var ErrHasUnreadBody = NewHttpError(StatusRequestEntityTooLarge,
-	"can't read new request, body of previous request wasn't read")
+	"server didn't fully read request body, connection corrupted")
 
 var ErrBodyHasBeenAlreadyRead = errors.New(
 	"request body has already been read")

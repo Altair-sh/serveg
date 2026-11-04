@@ -34,8 +34,6 @@ type Response struct {
 	bodyReader io.Reader
 }
 
-const TimeFormat = "Mon, 02 Jan 2006 15:04:05 GMT"
-
 func (res *Response) reset() {
 	if !res.needsReset {
 		return
@@ -55,14 +53,13 @@ func (res *Response) reset() {
 	res.bodyReader = nil
 }
 
-func (conn *Connection) CreateResponse(status StatusCode, req *Request, wantsClose bool) *Response {
-
-	res := &conn.res
+func (conn *Connection) CreateResponse(status StatusCode, req *Request, wantsClose bool) (res *Response) {
+	res = &conn._res
 	res.reset()
 	res.needsReset = true
 
 	res.Status = status
-	res.Headers["date"] = time.Now().UTC().Format(TimeFormat)
+	res.Headers["date"] = time.Now().UTC().Format(HeaderTimeFormat)
 	// without it browser may remember response and not resend it
 	res.Headers["cache-control"] = "no-store"
 
@@ -82,7 +79,7 @@ func (conn *Connection) CreateResponse(status StatusCode, req *Request, wantsClo
 		res.Headers["connection"] = "keep-alive"
 	}
 
-	return res
+	return
 }
 
 func (res *Response) WithBodyBuf(body []byte, contentType string) *Response {
@@ -125,7 +122,14 @@ func (res *Response) WithBodyReader(body io.Reader,
 	return res
 }
 
-func (conn *Connection) SendResponse(res *Response) (err error) {
+func (conn *Connection) CreateErrorResponse(
+	req *Request, wantsClose bool, httpErr *HttpError,
+) *Response {
+	return conn.CreateResponse(httpErr.Status, req, wantsClose).
+		WithBodyStr(httpErr.Error(), TextPlain)
+}
+
+func (conn *Connection) sendResponse(res *Response) (err error) {
 	if closer, ok := res.bodyReader.(io.Closer); ok {
 		// body is owned by the response
 		defer func() {
@@ -166,7 +170,7 @@ func (conn *Connection) SendResponse(res *Response) (err error) {
 		// WithBodyReader was called.
 		remaining := res.bodySize
 		for remaining > 0 {
-			err = conn.socket.SetWriteDeadline(time.Now().Add(conn.timeout))
+			err = conn.socket.SetWriteDeadline(time.Now().Add(conn.Timeout))
 			if err != nil {
 				return
 			}
@@ -189,11 +193,4 @@ func (conn *Connection) SendResponse(res *Response) (err error) {
 		}
 	}
 	return
-}
-
-func (conn *Connection) CreateErrorResponse(
-	req *Request, wantsClose bool, httpErr *HttpError,
-) *Response {
-	return conn.CreateResponse(httpErr.Status, req, wantsClose).
-		WithBodyStr(httpErr.Error(), TextPlain)
 }
