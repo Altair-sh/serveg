@@ -90,7 +90,8 @@ type UrlStatus uint32
 const (
 	UrlFile = UrlStatus(iota)
 	UrlDir
-	UrlNotFound
+	UrlDoesntExistInShare
+	UrlShareNotFound
 	UrlForbidden
 	UrlIncorrect
 )
@@ -115,7 +116,7 @@ func (shares Shares) MapUrl(url string) (string, *SharedLocation, UrlStatus) {
 		fi, err := os.Stat(pathAbs)
 		switch {
 		case errors.Is(err, fs.ErrNotExist):
-			return pathAbs, sh, UrlNotFound
+			return pathAbs, sh, UrlDoesntExistInShare
 		case err != nil:
 			return pathAbs, sh, UrlForbidden
 		case fi.IsDir():
@@ -124,5 +125,5 @@ func (shares Shares) MapUrl(url string) (string, *SharedLocation, UrlStatus) {
 			return pathAbs, sh, UrlFile
 		}
 	}
-	return url, nil, UrlNotFound
+	return url, nil, UrlShareNotFound
 }

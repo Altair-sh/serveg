@@ -92,7 +92,7 @@ func (conn *Connection) Start() {
 			conn.log.Info(req.Method, " ", req.Url, " ", req.Protocol)
 			conn.log.Trace("request headers: ", HeadersToString(req.Headers, SecretHeaders))
 			res = conn.callback(req)
-			if req.HasUnreadBody() {
+			if !res.CloseConnection && req.HasUnreadBody() {
 				res = conn.CreateErrorResponse(req, true, ErrHasUnreadBody)
 			}
 		}
@@ -107,7 +107,7 @@ func (conn *Connection) Start() {
 		}
 
 		// it is set by CreateResponse
-		if res.Headers["connection"] == "close" {
+		if res.CloseConnection {
 			conn.lingeringClose()
 			return
 		}

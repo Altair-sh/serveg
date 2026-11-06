@@ -18,6 +18,7 @@ func (c StatusCode) String() string {
 
 // HTTP status codes as registered with IANA.
 // See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
+// Details: https://en.wikipedia.org/wiki/List_of_HTTP_status_codes
 const (
 	StatusNotInitialized     StatusCode = 0   // for Response.reset
 	StatusContinue           StatusCode = 100 // RFC 9110, 15.2.1

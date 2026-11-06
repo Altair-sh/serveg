@@ -17,7 +17,7 @@ type Shares []*SharedLocation
 
 type Config struct {
 	Addr      string `toml:"address"`
-	MaxUpload int64  `toml:"max_upload"`
+	MaxUpload uint64 `toml:"max_upload"`
 	HtmlTitle string `toml:"html_title"`
 	// sorted by Url in reverse to allow this pattern:
 	// shared/private

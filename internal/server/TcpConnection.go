@@ -28,21 +28,26 @@ func (conn *TcpConnection) Start() {
 	conn.http.Start()
 }
 
-func (conn *TcpConnection) handleHttpRequest(req *http.Request) (res *http.Response) {
+func (conn *TcpConnection) handleHttpRequest(req *http.Request) *http.Response {
 	switch req.Method {
 	case "GET", "HEAD":
-		res = conn.serveFileOrDir(req)
+		return conn.GET_HEAD(req)
 	case "PUT", "OPTIONS":
-		res = conn.handleUpload(req)
+		return conn.PUT_OPTIONS(req)
 	default:
-		res = conn.createErrorResponse(req, false, http.StatusMethodNotAllowed, req.Method)
-		res.Headers["allow"] = "GET, HEAD, PUT, OPTIONS"
+		return conn.responseMethodNotAllowed(req, "GET, HEAD, PUT, OPTIONS")
 	}
-	return
 }
 
 func (conn *TcpConnection) createErrorResponse(
 	req *http.Request, wantsClose bool, status http.StatusCode, msg string,
 ) *http.Response {
 	return conn.http.CreateErrorResponse(req, wantsClose, http.NewHttpError(status, msg))
+}
+
+func (conn *TcpConnection) responseMethodNotAllowed(req *http.Request, allowedMethods string,
+) *http.Response {
+	return conn.createErrorResponse(req, false,
+		http.StatusMethodNotAllowed, req.Method).
+		WithHeader("allow", allowedMethods)
 }

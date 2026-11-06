@@ -24,6 +24,8 @@ type Response struct {
 	Status     StatusCode
 	// keys are in lower case
 	Headers HeadersMap
+	// close connection after sending response
+	CloseConnection bool
 	// don't add body and content-* headers for HEAD request
 	omitBody bool
 	bodySize int64
@@ -42,6 +44,7 @@ func (res *Response) reset() {
 	res.needsReset = false
 	res.Status = StatusNotInitialized
 	clear(res.Headers)
+	res.CloseConnection = false
 	res.omitBody = false
 	res.bodySize = 0
 	res.bodyType = responseBodyEmpty
@@ -74,6 +77,7 @@ func (conn *Connection) CreateResponse(status StatusCode, req *Request, wantsClo
 	}
 
 	if wantsClose || !req.WantsKeepAlive {
+		res.CloseConnection = true
 		res.Headers["connection"] = "close"
 	} else if req.Protocol == "HTTP/1.0" {
 		res.Headers["connection"] = "keep-alive"

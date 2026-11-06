@@ -3,6 +3,7 @@ package http
 import (
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	sh "serveg/internal/string_helper"
 	"strconv"
@@ -104,20 +105,26 @@ func (req *Request) HasUnreadBody() bool {
 	return req.bodyReader.N > 0
 }
 
+// maxBodyLen: pass -1 to disable limit
+// returns HttpError
 func (req *Request) GetBodyReader(maxBodyLen int64) (io.Reader, error) {
+	if maxBodyLen < 0 {
+		maxBodyLen = math.MaxInt64
+	}
 	if req.ContentLength > maxBodyLen {
 		return nil, NewHttpError(StatusRequestEntityTooLarge,
-			fmt.Sprintf("content-length %d > maxBodyLen %d",
+			fmt.Sprintf("content-length (%d) > maxBodyLen (%d)",
 				req.ContentLength, maxBodyLen))
+	}
+	if req.ContentLength == 0 {
+		// body reader with N=0 is a valid reader that just returns EOF
+		return &req.bodyReader, nil
 	}
 	if !req.HasUnreadBody() {
 		return nil, ErrBodyHasBeenAlreadyRead
 	}
 
-	if req.ContentLength != 0 {
-		// body reader with N=0 is a valid reader that just returns EOF
-		req.bodyReader.N = min(req.bodyReader.N, maxBodyLen)
-	}
+	req.bodyReader.N = min(req.bodyReader.N, maxBodyLen)
 	return &req.bodyReader, nil
 }
 

@@ -11,7 +11,7 @@ import (
 type ShareAccess uint8
 
 const (
-	AccessDenied ShareAccess = iota
+	AccessIncorrectPassword ShareAccess = iota
 	AccessReadOnly
 	AccessReadWrite
 )
@@ -22,7 +22,7 @@ func checkSharePasswords(share *SharedLocation, req *http.Request,
 ) ShareAccess {
 	reqPass := getBasicAuthPassword(req)
 	canWrite := share.WritePassword != "" &&
-		(reqPass != "" && passwordMatches(reqPass, share.WritePassword))
+		reqPass != "" && passwordMatches(reqPass, share.WritePassword)
 	if canWrite {
 		return AccessReadWrite
 	}
@@ -31,7 +31,7 @@ func checkSharePasswords(share *SharedLocation, req *http.Request,
 	if canRead {
 		return AccessReadOnly
 	}
-	return AccessDenied
+	return AccessIncorrectPassword
 }
 
 func getBasicAuthPassword(req *http.Request) string {

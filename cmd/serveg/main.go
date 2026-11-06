@@ -31,6 +31,7 @@ func run() int {
 		return 1
 	}
 
+	// TODO: cleanup leftover .uploading files on restart
 	srv := server.NewServer(conf)
 	if err := srv.StartGoroutine(); err != nil {
 		logger.Error(err)

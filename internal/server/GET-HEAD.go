@@ -9,16 +9,16 @@ import (
 	"time"
 )
 
-func (conn *TcpConnection) serveFileOrDir(req *http.Request) *http.Response {
+func (conn *TcpConnection) GET_HEAD(req *http.Request) *http.Response {
 	path, share, urlStatus := conn.srv.Conf.Share.MapUrl(req.Url)
 	// handle authorization
 	if share != nil {
 		access := checkSharePasswords(share, req)
 		if access < AccessReadOnly {
-			return conn.createErrorResponse(req, false, http.StatusUnauthorized,
-				"authorization required").
+			return conn.createErrorResponse(req, false,
+				http.StatusUnauthorized, "reader password required").
 				WithHeader("www-authenticate",
-					`Basic realm="`+share.Url+`", charset="UTF-8"`)
+					`Basic realm="`+share.Url+` (read)", charset="UTF-8"`)
 		}
 	}
 
@@ -27,7 +27,7 @@ func (conn *TcpConnection) serveFileOrDir(req *http.Request) *http.Response {
 		return conn.serveFile(req, path)
 	case UrlDir:
 		return conn.serveDirListing(req, path)
-	case UrlNotFound:
+	case UrlShareNotFound, UrlDoesntExistInShare:
 		return conn.createErrorResponse(req, false, http.StatusNotFound, req.Url)
 	case UrlForbidden:
 		return conn.createErrorResponse(req, false, http.StatusForbidden, req.Url)
