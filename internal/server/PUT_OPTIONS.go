@@ -104,7 +104,7 @@ func (conn *TcpConnection) handleUpload(req *http.Request, filePath string, file
 
 	// OPTIONS
 	if !reqHasBody {
-		uploadSize, err := strconv.ParseUint(req.Headers["x-upload-size"], 10, 64)
+		uploadSize, err := strconv.ParseUint(req.Headers["x-upload-size"], 10, 63)
 		if err != nil {
 			return createResponseMsg(http.StatusBadRequest,
 				"OPTIONS request must have valid header x-upload-size")

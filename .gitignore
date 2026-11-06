@@ -2,3 +2,5 @@
 /serveg
 bin/
 __debug_bin*
+graphify-out/
+graphify_out/

@@ -25,3 +25,22 @@ bin/servegp         # reads ./serveg.toml
 bin/servegp -config /etc/serveg/serveg.toml
 ```
 
+## HTTP API
+
+| Request | Result |
+|---|---|
+| `GET /share/dir/` | directory listing with an upload form if the share has `write_password` |
+| `GET /share/file` | download file, supports `If-Modified-Since`, `Range` (single range) and `If-Range` (date) |
+| `PUT /share/file` | upload: 201 created, 200 replaced |
+| `OPTIONS /share/file` with `X-Upload-Size: <size>` | upload check, same as PUT but without body |
+
+Passwords use HTTP Basic auth, the user name is ignored:
+
+```sh
+curl -O http://localhost:8080/public/file.zip
+curl -C - -O http://localhost:8080/public/file.zip # continue interrupted download
+curl -u :password -T file.zip http://localhost:8080/public/file.zip
+```
+
+Error responses explain the reason in a plain text body.
+
