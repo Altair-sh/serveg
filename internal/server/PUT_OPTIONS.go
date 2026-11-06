@@ -24,7 +24,7 @@ var ErrIsUploadingAlready = http.NewHttpError(http.StatusConflict,
 var ErrFileIsDir = http.NewHttpError(http.StatusConflict,
 	"there is a directory with such name already")
 
-// PUT: accept request body and write it to filePath+".uploading"
+// PUT: accept request body and write it to filePath+UploadingSuffix
 // OPTIONS: check if file can be uploaded and return without reading body
 // returns StatusCreated if upload is a new file, and StatusOK if it is replacing existing file
 func (conn *TcpConnection) PUT_OPTIONS(req *http.Request) *http.Response {
@@ -87,7 +87,7 @@ func (conn *TcpConnection) handleUpload(req *http.Request, filePath string, file
 			WithBodyStr(msg, http.TextPlain)
 	}
 
-	tmpPath := filePath + ".uploading"
+	tmpPath := filePath + UploadingSuffix
 	tmpFileExists, fi, err := DirOrFileExists(tmpPath)
 	if err != nil {
 		return errToResponse(err)
@@ -161,6 +161,5 @@ func (conn *TcpConnection) handleUpload(req *http.Request, filePath string, file
 	}
 	renamed = true
 
-	// TODO: is it right status?
 	return conn.http.CreateResponse(resultStatus, req, false)
 }
