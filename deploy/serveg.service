@@ -1,0 +1,19 @@
+[Unit]
+Description=serveg file server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=filebin
+Group=filebin
+WorkingDirectory=/home/filebin
+ExecStart=/home/filebin/serveg
+Restart=on-failure
+RestartSec=5
+
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

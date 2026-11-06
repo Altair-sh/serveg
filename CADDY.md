@@ -38,27 +38,9 @@ sudo systemctl restart caddy
 ### Fail2ban
 Service that reads logs from various sources, finds password trials and bans ip if it tries to brute force password.
 
-Write to `/etc/fail2ban/filter.d/caddy-auth.conf`
-```conf
-[Definition]
-failregex = <ADDR> 401 REDACTED$
-ignoreregex =
-```
+Copy [delpoy/caddy-auth.conf](./delpoy/caddy-auth.conf) to `/etc/fail2ban/filter.d/caddy-auth.conf`
+Copy [delpoy/caddy-auth.local](./delpoy/caddy-auth.local) to `/etc/fail2ban/jail.d/caddy-auth.local`
 
-Write to `/etc/fail2ban/jail.d/caddy-auth.local`
-```conf
-[caddy-auth]
-enabled   = true
-filter    = caddy-auth # /etc/fail2ban/filter.d/caddy-auth.conf
-logpath   = /var/log/caddy/files-auth.log
-backend   = auto    # without it on debian fail2ban will use systemd logging and to read caddy log
-maxretry  = 10      # N wrong passwords
-findtime  = 10m     # sent during 10 minutes
-bantime   = 1h      # ban for 1 hour
-banaction = iptables-allports   # ban the ip for all ports
-protocol  = all                 # and all protocols
-ignoreip  = 127.0.0.1/8 ::1     # ignore localhost
-```
 Reload fail2ban:
 ```sh
 sudo fail2ban-client reload
