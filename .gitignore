@@ -4,3 +4,8 @@ bin/
 __debug_bin*
 graphify-out/
 graphify_out/
+tmp/
+temp/
+TEMP/
+*.tmp
+*.temp

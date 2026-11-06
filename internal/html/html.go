@@ -1,108 +1,106 @@
 package html
 
 import (
+	"bytes"
+	_ "embed"
+	"html/template"
 	"os"
 	"path"
+	"serveg/internal/disk_usage"
 	"serveg/internal/http"
-	"serveg/internal/log"
 	sh "serveg/internal/string_helper"
 )
 
-type listingRow struct {
-	name  string // html-escaped
-	url   string // url-encoded
-	mtime string // formatted with DateTimeTZ
-	size  string // formatted with HumanBytes
-	isDir bool
+const DateTimeTZ = "2006-01-02 15:04:05 UTC-07"
+
+// The template file is embedded into the binary at build time.
+//
+//go:embed ListingPage.gohtml
+var listingPageSrc string
+
+// Parsed once at startup, Execute() is safe for concurrent use.
+// Must() panics on syntax error, so a broken template fails at start, not on request.
+var listingPageTemplate = template.Must(template.New("ListingPage").Parse(listingPageSrc))
+
+// Data for ListingPage.gohtml. Fields must be exported to be visible in the template.
+// Values are not escaped: html/template does it.
+type listingPage struct {
+	Title     string
+	Path      string // directory url, ends with '/'
+	PathUrl   string // percent-encoded Path
+	ParentUrl string // percent-encoded, ends with '/'
+	Writable  bool   // show the upload form
+	FreeSpace string // formatted with HumanBytes
+	Entries   []listingEntry
 }
 
-func (row *listingRow) genHtml(sb *sh.StringBuilder) {
-	sb.AddS(`<tr>`)
-	sb.AddS(`<td><a href="`).AddS(row.url)
-	if row.isDir {
-		// add slash to directory url
-		// because browser remembers password for directory with trailing slash
-		sb.AddS(`/">`)
-	} else {
-		// tell browser to download file instead of opening in new tab
-		sb.AddS(`" download>`)
-	}
-	sb.AddS(row.name).AddS(`</a></td>`)
-	sb.AddS(`<td class="size">`).AddS(row.size).AddS(`</td>`)
-	sb.AddS(`<td class="date">`).AddS(row.mtime).AddS(`</td>`)
-	sb.AddS(`</tr>`)
+type listingEntry struct {
+	Name  string
+	Url   string // percent-encoded, without trailing '/'
+	Size  string // formatted with HumanBytes, empty for directories
+	Date  string // formatted with DateTimeTZ
+	IsDir bool
 }
 
-func GenDirListingHtml(logger *log.LoggerContext, dirPath, reqUrl, pageTitle string) ([]byte, error) {
+// reqUrl is a clean url without trailing slash (except "/"), see sh.ResolveSafePath
+func GenDirListingHtml(dirPath, reqUrl, pageTitle string, writable bool) ([]byte, error) {
 	dirEntries, err := os.ReadDir(dirPath)
 	if err != nil {
 		return nil, err
 	}
 
-	var dirs, files []listingRow
-	var estimatedLen = 460 // html for page without entries
+	dirUrl := withTrailingSlash(reqUrl)
+	page := listingPage{
+		Title:     pageTitle + " " + dirUrl,
+		Path:      dirUrl,
+		PathUrl:   http.PercentEcodeUrl(dirUrl),
+		ParentUrl: http.PercentEcodeUrl(withTrailingSlash(path.Dir(reqUrl))),
+		Writable:  writable,
+		Entries:   make([]listingEntry, 0, len(dirEntries)),
+	}
+
+	// listing is still useful without free space, so error is shown on the page
+	if usage, err := disk_usage.DiskUsage(dirPath); err == nil {
+		page.FreeSpace = sh.HumanBytes(usage.Free)
+	} else {
+		page.FreeSpace = "unknown (" + err.Error() + ")"
+	}
+
+	// directories first, then files, both sorted by name (os.ReadDir sorts)
+	var files []listingEntry
 	for _, e := range dirEntries {
 		einf, err := e.Info()
 		if err != nil {
 			return nil, err
 		}
-
-		row := listingRow{
-			name:  htmlEscape(e.Name()),
-			url:   http.PercentEcodeUrl(path.Join(reqUrl, e.Name())),
-			mtime: einf.ModTime().Format(DateTimeTZ),
-			isDir: e.IsDir(),
+		entry := listingEntry{
+			Name:  e.Name(),
+			Url:   http.PercentEcodeUrl(dirUrl + e.Name()),
+			Date:  einf.ModTime().Format(DateTimeTZ),
+			IsDir: e.IsDir(),
 		}
-		if row.isDir {
-			row.size = "DIR"
-			dirs = append(dirs, row)
+		if entry.IsDir {
+			page.Entries = append(page.Entries, entry)
 		} else {
-			row.size = sh.HumanBytes(einf.Size())
-			files = append(files, row)
+			entry.Size = sh.HumanBytes(einf.Size())
+			files = append(files, entry)
 		}
-
-		estimatedLen += len(row.name) + len(row.url) + len(row.mtime) + len(row.size)
-		estimatedLen += 100 // html for row
 	}
+	page.Entries = append(page.Entries, files...)
 
-	sb := sh.StringBuilder{Buf: make([]byte, 0, estimatedLen)}
-	sb.AddS(`<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>`)
-	sb.AddS(htmlEscape(pageTitle + " " + reqUrl))
-	sb.AddS(`
-</title>
-<style>
-	body { font-family: sans-serif; margin: 2em; }
-	td { padding: .2em 1em .2em 0; }
-	td.size, td.date { color: #666; white-space: nowrap; }
-</style>
-</head>
-<body>`)
-	sb.AddS("<h1>").AddS(htmlEscape(reqUrl)).AddS("</h1>")
-	sb.AddS(`<table id="listing">`)
-	sb.AddS(`<tr><td><a href="`)
-	sb.AddS(http.PercentEcodeUrl(path.Dir(reqUrl)))
-	sb.AddS(`">../</a></td></tr>`)
-
-	for i := 0; i < len(dirs); i++ {
-		dirs[i].genHtml(&sb)
+	// render to buffer, not to socket: content-length must be known,
+	// and an error in the middle must not send a half page
+	var buf bytes.Buffer
+	buf.Grow(len(listingPageSrc) + len(page.Entries)*200)
+	if err := listingPageTemplate.Execute(&buf, &page); err != nil {
+		return nil, err
 	}
-	for i := 0; i < len(files); i++ {
-		files[i].genHtml(&sb)
-	}
+	return buf.Bytes(), nil
+}
 
-	sb.AddS(`
-</table>
-</body>
-</html>`)
-
-	realLen := sb.Len()
-	if estimatedLen < realLen {
-		logger.Warn("genDirListingHtml(): size prediction failed. estimatedLen: ",
-			estimatedLen, " realLen: ", realLen)
+func withTrailingSlash(s string) string {
+	if len(s) > 0 && s[len(s)-1] == '/' {
+		return s
 	}
-	return sb.Buf, nil
+	return s + "/"
 }

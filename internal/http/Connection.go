@@ -41,16 +41,19 @@ func NewConnection(
 	logger *log.LoggerContext,
 	callback ConnCallback,
 ) *Connection {
+	r := bufio.NewReaderSize(socket, maxHeaderBytes)
 	return &Connection{
 		Timeout:  defaultTimeout,
 		log:      logger,
 		callback: callback,
 		socket:   socket,
-		r:        bufio.NewReaderSize(socket, maxHeaderBytes),
+		r:        r,
 		wbuf:     sh.StringBuilder{Buf: make([]byte, 0, initialWriteBufCap)},
 		_req: Request{
 			QueryParams: make(mapStrStr),
 			Headers:     make(HeadersMap),
+			// body is read from the same buffered reader as headers
+			bodyReader: io.LimitedReader{R: r},
 		},
 		_res: Response{
 			Headers: make(HeadersMap),

@@ -26,7 +26,9 @@ func (conn *TcpConnection) GET_HEAD(req *http.Request) *http.Response {
 	case UrlFile:
 		return conn.serveFile(req, path)
 	case UrlDir:
-		return conn.serveDirListing(req, path)
+		// show upload form if the share accepts uploads
+		writable := share != nil && share.WritePassword != ""
+		return conn.serveDirListing(req, path, writable)
 	case UrlShareNotFound, UrlDoesntExistInShare:
 		return conn.createErrorResponse(req, false, http.StatusNotFound, req.Url)
 	case UrlForbidden:
@@ -39,9 +41,9 @@ func (conn *TcpConnection) GET_HEAD(req *http.Request) *http.Response {
 	}
 }
 
-func (conn *TcpConnection) serveDirListing(req *http.Request, dirPath string) *http.Response {
-	htmlBytes, err := html.GenDirListingHtml(&conn.log, dirPath,
-		req.Url, conn.srv.Conf.HtmlTitle)
+func (conn *TcpConnection) serveDirListing(req *http.Request, dirPath string, writable bool) *http.Response {
+	htmlBytes, err := html.GenDirListingHtml(dirPath,
+		req.Url, conn.srv.Conf.HtmlTitle, writable)
 	if err != nil {
 		return conn.createErrorResponse(req, false, http.StatusInternalServerError, err.Error())
 	}
