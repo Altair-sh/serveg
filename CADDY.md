@@ -3,9 +3,15 @@
 ## Caddy
 Modern http proxy server with easy configuration.
 
-Install log formatter plugin:
+Rebuild caddy with transform-encoder (used to format logs that fail2ban reads):
 ```sh
-caddy add-package github.com/caddyserver/transform-encoder
+go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
+~/go/bin/xcaddy build --with github.com/caddyserver/transform-encoder
+sudo mv caddy /usr/bin/caddy
+sudo systemctl restart caddy
+caddy list-modules | grep transform
+sudo apt-mark hold caddy
+rm -rf ~/go
 ```
 
 Add to `/etc/caddy/Caddyfile`:
@@ -38,17 +44,15 @@ sudo systemctl restart caddy
 ### Fail2ban
 Service that reads logs from various sources, finds password trials and bans ip if it tries to brute force password.
 
-Copy [delpoy/caddy-auth.conf](./delpoy/caddy-auth.conf) to `/etc/fail2ban/filter.d/caddy-auth.conf`
-Copy [delpoy/caddy-auth.local](./delpoy/caddy-auth.local) to `/etc/fail2ban/jail.d/caddy-auth.local`
-
-Reload fail2ban:
-```sh
-sudo fail2ban-client reload
-```
-
-Test fail2ban:
-```sh
-curl -s -o /dev/null -u wrong:wrong https://files.example.com/
-curl -s -o /dev/null https://files.example.com/
-fail2ban-regex /var/log/caddy/files-auth.log /etc/fail2ban/filter.d/caddy-auth.conf
-```
+1. Copy [delpoy/caddy-auth.conf](./delpoy/caddy-auth.conf) to `/etc/fail2ban/filter.d/caddy-auth.conf`
+2. Copy [delpoy/caddy-auth.local](./delpoy/caddy-auth.local) to `/etc/fail2ban/jail.d/caddy-auth.local`
+3. Reload fail2ban:
+    ```sh
+    sudo fail2ban-client reload
+    ```
+4. Test fail2ban:
+    ```sh
+    curl -s -o /dev/null -u wrong:wrong https://files.example.com/private
+    curl -s -o /dev/null https://files.example.com/private
+    sudo fail2ban-regex /var/log/caddy/files-auth.log /etc/fail2ban/filter.d/caddy-auth.conf
+    ```

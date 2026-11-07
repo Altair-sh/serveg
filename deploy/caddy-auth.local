@@ -1,11 +1,19 @@
 [caddy-auth]
 enabled   = true
-filter    = caddy-auth # /etc/fail2ban/filter.d/caddy-auth.conf
+# /etc/fail2ban/filter.d/caddy-auth.conf
+filter    = caddy-auth
 logpath   = /var/log/caddy/files-auth.log
-backend   = auto    # without it on debian fail2ban will use systemd logging and to read caddy log
-maxretry  = 10      # N wrong passwords
-findtime  = 10m     # sent during 10 minutes
-bantime   = 1h      # ban for 1 hour
-banaction = iptables-allports   # ban the ip for all ports
-protocol  = all                 # and all protocols
-ignoreip  = 127.0.0.1/8 ::1     # ignore localhost
+# without it on debian fail2ban will use systemd logging and to read caddy log
+backend   = auto
+# N wrong passwords
+maxretry  = 10
+# sent during 10 minutes
+findtime  = 10m
+# ban for 1 hour
+bantime   = 1h
+# ban the ip for all ports
+banaction = iptables-allports
+# and all protocols
+protocol  = all
+# ignore localhost
+ignoreip  = 127.0.0.1/8 ::1
